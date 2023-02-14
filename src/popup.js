@@ -45,6 +45,37 @@ function inProgress(ongoing, failed = false, rerun = true) {
   }
 }
 
+
+async function getPRDetails() {
+  let tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+  console.log(tab.url);
+  let prDetail = { isRightUrl: true, url : tab.url };
+  
+  let vsPattern = /https:\/\/([^.]+).visualstudio.com\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/;
+  let devAzurepattern = /https:\/\/dev.azure.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/;
+  let vsMatch = vsPattern.exec(tab.url);
+  let devMatch = devAzurepattern.exec(tab.url);
+  
+  if (vsMatch) {
+    prDetail.organisation = vsMatch[1];
+    prDetail.project = vsMatch[2];
+    prDetail.repoName = vsMatch[3];
+    prDetail.pullRequestId = vsMatch[4];
+    prDetail.prSessionKey = prDetail.organisation + prDetail.repoName + prDetail.pullRequestId
+  } else if (devMatch) {
+    prDetail.organisation = devMatch[1];
+    prDetail.project = devMatch[2];
+    prDetail.repoName = devMatch[3];
+    prDetail.pullRequestId = devMatch[4];
+    prDetail.prSessionKey = prDetail.organisation + prDetail.repoName + prDetail.pullRequestId
+  } else {
+    prDetail.isRightUrl = false;
+  }
+
+  console.log(JSON.stringify(prDetail));
+  return prDetail
+}
+
 async function getAccessToken() {
   const resp = await fetch("https://chat.openai.com/api/auth/session")
     .then((r) => r.json())
@@ -69,7 +100,6 @@ async function* streamAsyncIterable(stream) {
     reader.releaseLock();
   }
 }
-
 
 async function fetchSSE(resource, options) {
   const { onMessage, ...fetchOptions } = options;
@@ -101,6 +131,7 @@ async function callChatGPT(question, callback, onDone) {
   } catch (e) {
     callback('Please login at <a href="https://chat.openai.com" target="_blank" class="hover:text-slate-800">chat.openai.com</a> first.');
   }
+
   await fetchSSE("https://chat.openai.com/backend-api/conversation", {
     method: "POST",
     headers: {
@@ -128,11 +159,7 @@ async function callChatGPT(question, callback, onDone) {
         onDone();
         return;
       }
-      console.log("******************* message : " + message)
       const data = parseJsonOrReturnAsIs(message);
-      console.log(data)
-      console.log("******************* message : " + data)
-
       const text = data.message?.content?.parts?.[0];
       if (text) {
         callback(text);
@@ -143,24 +170,15 @@ async function callChatGPT(question, callback, onDone) {
 const showdown = require('showdown');
 const converter = new showdown.Converter()
 
-async function reviewPR(org, repo, pr) {
+
+
+async function reviewPR(prDetail) {
   inProgress(true)
   document.getElementById('result').innerHTML = ''
-  chrome.storage.session.remove([org + repo + pr])
+  chrome.storage.session.remove([prDetail.prSessionKey])
 
-  let tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-  let tokens = tab.url.split('/')
-  // const base64 = require("base64-arraybuffer");
-  let organisation = tokens[3]
-  let project = tokens[4]
-  let repoName = tokens[6]
-  let pullRequestId = tokens[8]
-  // eg.  https://dev.azure.com/O365Exchange/O365%20Core/_git/Analytics/pullrequest/2444207?_a=files
-  // 0 = https: 1 =dev.azure.com 2= O365Exchange 3 =O365%20Core 4 =_git 5=Analytics
-
-  const personalAccessToken = "<>";
-
-  const pullRequestDetailUrl = `https://dev.azure.com/${organisation}/${project}/_apis/git/pullrequests/${pullRequestId}?api-version=7.0`
+  const personalAccessToken = "pat";
+  const pullRequestDetailUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/pullrequests/${prDetail.pullRequestId}?api-version=7.0`
   const headers = {
     Authorization: `Basic ${personalAccessToken}`,
     "Content-Type": "application/json",
@@ -176,7 +194,7 @@ async function reviewPR(org, repo, pr) {
   console.log(" Source branch = " + sourceBranch)
   console.log(" targetBranch branch = " + targetBranch)
 
-  const compareUrl = `https://dev.azure.com/${organisation}/${project}/_apis/git/repositories/${repoName}/diffs/commits?$top=10&$skip=0&baseVersion=${targetBranch}&targetVersion=${sourceBranch}&api-version=7.0`;
+  const compareUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/diffs/commits?$top=10&$skip=0&baseVersion=${targetBranch}&targetVersion=${sourceBranch}&api-version=7.0`;
   var filePathToContentObjects = []
   const getContentsOfChangedFiles = async () => {
     const compareResponse = await (await fetch(compareUrl, {
@@ -237,7 +255,7 @@ async function reviewPR(org, repo, pr) {
     console.log(`finished reviewing the code ${filePathToContentObjects[i].path}`)
 
     // add a comment
-    let addCommentURL = `https://dev.azure.com/${organisation}/${project}/_apis/git/repositories/${repoName}/pullRequests/${pullRequestId}/threads?api-version=7.0`
+    let addCommentURL = `https://dev.azure.com/${prDetail.organisation}/${project}/_apis/git/repositories/${prDetail.repoName}/pullRequests/${prDetail.pullRequestId}/threads?api-version=7.0`
     console.log(`Comment URL : ${addCommentURL}`)
     await (await fetch(addCommentURL, {
       method: "POST",
@@ -263,47 +281,32 @@ async function reviewPR(org, repo, pr) {
 }
 
 async function run() {
-  let tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+  let prDetail = await getPRDetails();
+  console.log(JSON.stringify(prDetail));
   let prUrl = document.getElementById('pr-url')
-  prUrl.textContent = tab.url
-  console.log(tab.url)
-  let tokens = tab.url.split('/')
+  prUrl.textContent = prDetail.url
+  console.log(prDetail.url)
 
-  let portalURL = tokens[2]
-  console.log("portalURL: " + 'dev.azure.com' + "tokens[2]: " + !tokens[2].includes("dev.azure.com") + "tokens[5]  " + tokens[5])
-
-  if (!(tokens[2].includes("visualstudio.com") || tokens[2].includes("azure.com"))) {
+  if (!prDetail.isRightUrl) {
     console.log("failed check")
-    document.getElementById('result').innerHTML = 'Please open a specific PR on *.azure.com'
+    document.getElementById('result').innerHTML = 'Please open a specific PR on *.azure.com or *.visualstudio.com'
     inProgress(false, true, false)
-    await new Promise(r => setTimeout(r, 100000));
+    await new Promise(r => setTimeout(r, 1000));
     window.close();
     return // not a pr
   }
 
   console.log("passed check")
-  inProgress(true)
-  let org = tokens[3]
-  let repo = tokens[4]
-  let pr = tokens[6]
-
-  // alert(pr)
-  if (portalURL === 'dev.azure.com') {
-    org = tokens[3]
-    repo = tokens[6]
-    pr = tokens[8]
-  }
-
   document.getElementById("rerun-btn").onclick = () => {
-    reviewPR(org, repo, pr)
+    reviewPR(prDetail)
   }
 
-  chrome.storage.session.get([org + repo + pr]).then((result) => {
-    if (result[org + repo + pr]) {
-      document.getElementById('result').innerHTML = result[org + repo + pr]
+  chrome.storage.session.get([prDetail.prSessionKey]).then((result) => {
+    if (result[prDetail.prSessionKey]) {
+      document.getElementById('result').innerHTML = result[prDetail.prSessionKey]
       inProgress(false)
     } else {
-      reviewPR(org, repo, pr)
+      reviewPR(prDetail)
     }
   })
 }
