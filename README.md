@@ -1,1 +1,1 @@
-# AZ Code Reviewer
+# AI Code Reviewer for Azure repos
