@@ -19,6 +19,12 @@ const xcircle = `
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
 `
+document.getElementById("patToken").value = localStorage.getItem("patToken");
+document.getElementById('savePAT').addEventListener('click', function () {
+  const apiKey = document.getElementById("patToken").value;
+  localStorage.setItem("patToken", apiKey)
+});
+
 function parseJsonOrReturnAsIs(str) {
   try {
     return JSON.parse(str);
@@ -49,13 +55,13 @@ function inProgress(ongoing, failed = false, rerun = true) {
 async function getPRDetails() {
   let tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
   console.log(tab.url);
-  let prDetail = { isRightUrl: true, url : tab.url };
-  
+  let prDetail = { isRightUrl: true, url: tab.url };
+
   let vsPattern = /https:\/\/([^.]+).visualstudio.com\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/;
   let devAzurepattern = /https:\/\/dev.azure.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/;
   let vsMatch = vsPattern.exec(tab.url);
   let devMatch = devAzurepattern.exec(tab.url);
-  
+
   if (vsMatch) {
     prDetail.organisation = vsMatch[1];
     prDetail.project = vsMatch[2];
@@ -129,7 +135,7 @@ async function callChatGPT(question, callback, onDone) {
   try {
     accessToken = await getAccessToken();
   } catch (e) {
-    callback('Please login at <a href="https://chat.openai.com" target="_blank" class="hover:text-slate-800">chat.openai.com</a> first.');
+    callback('Please login at <a href="https://chat.openai.com" target="_blank" class="hover:text-slate-800" style="color: #0086ff;">chat.openai.com</a> first.');
   }
 
   await fetchSSE("https://chat.openai.com/backend-api/conversation", {
@@ -177,7 +183,7 @@ async function reviewPR(prDetail) {
   document.getElementById('result').innerHTML = ''
   chrome.storage.session.remove([prDetail.prSessionKey])
 
-  const personalAccessToken = "pat";
+  const personalAccessToken = localStorage.getItem("patToken");
   const pullRequestDetailUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/pullrequests/${prDetail.pullRequestId}?api-version=7.0`
   const headers = {
     Authorization: `Basic ${personalAccessToken}`,
@@ -185,16 +191,19 @@ async function reviewPR(prDetail) {
   };
   //  str.replace("data-", "")
   console.log("Headers ")
+
   const prDetailResponse = await (await fetch(pullRequestDetailUrl, {
     headers,
   })).json()
 
-  let sourceBranch = prDetailResponse.sourceRefName.replace("refs/heads/", "")
-  let targetBranch = prDetailResponse.targetRefName.replace("refs/heads/", "")
-  console.log(" Source branch = " + sourceBranch)
-  console.log(" targetBranch branch = " + targetBranch)
+  prDetail.sourceBranch = prDetailResponse.sourceRefName.replace("refs/heads/", ""); // your branch
+  prDetail.targetBranch = prDetailResponse.targetRefName.replace("refs/heads/", ""); // master
 
-  const compareUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/diffs/commits?$top=10&$skip=0&baseVersion=${targetBranch}&targetVersion=${sourceBranch}&api-version=7.0`;
+  prDetail.sourceCommitId = prDetailResponse.lastMergeSourceCommit.commitId;
+  prDetail.targetCommitId = prDetailResponse.lastMergeTargetCommit.commitId;
+  console.log(" PR Detail : " + JSON.stringify(prDetail));
+
+  const compareUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/diffs/commits?$top=10&$skip=0&baseVersion=${prDetail.targetBranch}&targetVersion=${prDetail.sourceBranch}&api-version=7.0`;
   var filePathToContentObjects = []
   const getContentsOfChangedFiles = async () => {
     const compareResponse = await (await fetch(compareUrl, {
@@ -213,22 +222,57 @@ async function reviewPR(prDetail) {
           headers,
         })).text();
         console.log(`item path : ${change.item.path} response size : ${itemResponse.length}`);
-        filePathToContentObjects.push({ path: change.item.path, content: itemResponse })
+
+        // TODO ; Add source and commit API calls
+        const sourceURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.sourceCommitId}`;
+        const targetURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.targetCommitId}`;
+
+        console.log(`sourceURL : ${sourceURL} targetURL : ${targetURL}`);
+
+        let sourceCode = await (await fetch(sourceURL, {
+          headers,
+        })).text();
+
+        if (sourceCode.includes("could not be found")) {
+          console.log("Deleted file, no review required : " + change.item.path)
+          sourceCode = ""
+          continue;
+        }
+
+        let sourceFilePath = change.item.path
+        let targetFilePath = change.item.path
+        let targetCode = await (await fetch(targetURL, {
+          headers,
+        })).text();
+
+        if (targetCode.includes("could not be found")) {
+          console.log("Couldn't find in target branch(master)")
+          targetFilePath = ""
+          targetCode = ""
+        }
+
+        const jsdiff = require('diff');
+        const diff = jsdiff.createTwoFilesPatch(`Source ${sourceFilePath}`, `target ${targetFilePath}`, targetCode, sourceCode, '', '', { context: 0 });
+        console.log(diff);
+        //const diff2 = jsdiff.structuredPatch(`Source ${change.item.path}`, `target ${change.item.path}`, targetCode, sourceCode, '', '', { context: 2 });
+        //console.log(JSON.stringify(diff2));
+
+        filePathToContentObjects.push({ path: change.item.path, content: diff })
       }
     }
   };
 
   await getContentsOfChangedFiles()
 
-  let i = 0;
   let len = filePathToContentObjects.length;
   let responseFinal = ''
-  for (; i < len;) {
+  for (let i = 0; i < len; i++) {
     let patch = filePathToContentObjects[i].content;
     console.log(patch)
     let prompt = `
-  Act as a code reviewer of a Pull Request, providing feedback on the code changes below.
-  You are provided with the file content. You will be given a file and and give review on following:
+    Act as a code reviewer of a Pull Request, providing feedback on the code changes in one file below.
+    You are provided with the file content in patch format containing removal and additions in the file. 
+    Give back response in json format only, which will be a list of objects containing line number as key and value will be list of comments.:
   \n
   ${patch}
   \n\n
@@ -238,6 +282,7 @@ async function reviewPR(prDetail) {
   - If there are any bugs, highlight them.
   - Does the code do what it says in the commit messages?
   - Highlight minor issues and nitpicks too.
+  - Do not suggest if a PR should be merged
   - Make sure coding conventions are followed in right way and there are no typos
   - Use bullet points if you have multiple comments.`
 
@@ -247,36 +292,45 @@ async function reviewPR(prDetail) {
         document.getElementById('result').innerHTML = converter.makeHtml(answer)
       },
       () => {
-        chrome.storage.session.set({ [org + repo + pr]: document.getElementById('result').innerHTML })
+        chrome.storage.session.set({ [prDetail.prSessionKey]: document.getElementById('result').innerHTML })
         inProgress(false)
       }
     )
 
     console.log(`finished reviewing the code ${filePathToContentObjects[i].path}`)
 
-    // add a comment
-    let addCommentURL = `https://dev.azure.com/${prDetail.organisation}/${project}/_apis/git/repositories/${prDetail.repoName}/pullRequests/${prDetail.pullRequestId}/threads?api-version=7.0`
-    console.log(`Comment URL : ${addCommentURL}`)
-    await (await fetch(addCommentURL, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify({
-        comments: [
-          {
-            content: converter.makeMarkdown(document.getElementById('result').innerHTML),
+    let skipCondition = responseFinal.includes("Please login at") || responseFinal.includes("Too many requests")
+    if (!skipCondition) {
+      // add a comment
+      let addCommentURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/pullRequests/${prDetail.pullRequestId}/threads?api-version=7.0`
+      console.log(`Comment URL : ${addCommentURL}`)
+      await (await fetch(addCommentURL, {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          comments: [
+            {
+              content: converter.makeMarkdown(document.getElementById('result').innerHTML),
+            }
+          ],
+          threadContext: {
+            filePath: filePathToContentObjects[i].path
           }
-        ],
-        threadContext: {
-          filePath: filePathToContentObjects[i].path
-        }
-      })
-    }));
-    // TODO : inProgress(true)
-    responseFinal += document.getElementById('result').innerHTML
-    i++;
-  }
-  // TODO :inProgress(false)
+        })
+      }));
+    }
+    inProgress(true)
 
+    if (skipCondition) {
+      responseFinal = document.getElementById('result').innerHTML
+    } else {
+      responseFinal += `<hr/><b> Review of ${filePathToContentObjects[i].path} </b>` + document.getElementById('result').innerHTML
+    }
+
+
+  }
+
+  inProgress(false)
   document.getElementById('result').innerHTML = responseFinal
 }
 
