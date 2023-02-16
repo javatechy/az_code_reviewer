@@ -6,7 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <title>AI Code reviewer</title>
+  <title><img>AI Code reviewer</title>
 </head>
 
 <body class="text-slate-900">
@@ -17,41 +17,42 @@
 
         <div class="flex flex-row items-center">
           <div class="text-xl flex-grow">
-            AI code reviewer
-            <span id="codeball-link" class="text-xs invisible text-slate-400"><a
+            &lt;AI Code reviewer/&gt;
+            <span class="text-xs text-slate-400"><a
                 href="https://github.com/javatechy/CodeReviewerPublic/blob/main/README.md" target="_blank"
-                class="inline text-orange-600 hover:text-orange-500">Read me if you are stuck</a></span>
+                class="inline text-orange-600 hover:text-orange-500">Stuck? Read this</a></span>
           </div>
-          <div id="reviewSelectedCode"
-            class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
-            Review selected code
-          </div>
+
         </div>
       </div>
       <hr />
       <div class="tab">
         <button id="azure" class="tablinks">Azure Devops</button>
+        <button id="codeSnippet" class="tablinks">Code Snippet</button>
         <button id="github" class="tablinks">Github</button>
       </div>
 
       <div id="azureContent" class="tabcontent">
         <div class="flex flex-row items-center text-sm">
           <div class="invisible">
-            <input type="password" class="col-sm-10 form-control" id="patToken" value=""
+            <div id="patToken"></div>
+            <div id="savePAT"></div>
+
+            <!-- <input type="password" class="col-sm-10 form-control" id="patToken" value=""
               placeholder="Personal Access Token"> &nbsp; &nbsp;
 
             <div id="savePAT" class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
               Save
-            </div> &nbsp; &nbsp; &nbsp;
+            </div> &nbsp; &nbsp; &nbsp; -->
           </div>
           <label for="myCheck">Post comments on PR</label> &nbsp;
           <input type="checkbox" id="postComments">
           &nbsp; &nbsp; &nbsp;
-          <label for="myCheck">Review complete diff too</label> &nbsp;
-          <input type="checkbox" id="reivewCompleteDiff"> &nbsp; &nbsp; &nbsp;
+          <!-- <label for="myCheck">Review complete diff too</label> &nbsp;
+          <input type="checkbox" id="reivewCompleteDiff"> &nbsp; &nbsp; &nbsp; -->
           <div id="rerun-btn"
             class="invisible text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
-            run again
+            Review again
           </div>
           <br />
 
@@ -64,15 +65,28 @@
             <span id="pr-url"></span></p>
           </div>
         </div>
+        <br />
+
       </div>
 
       <div id="githubContent" class="tabcontent">
-        <p>Coming soon....</p>
+        <div class="flex flex-row items-center text-sm">
+          Coming soon... <br />
+        </div>
+      </div>
+      <div id="codeSnippetContent" class="tabcontent">
+        <div class="flex flex-row items-center text-sm">
+          <span id="status-icon-cs"></span>&nbsp;
+          Choose code to review in tab, then reopen &nbsp; <code> &lt;AI Code reviewer/&gt; </code>
+          &nbsp;           
+          <br/> &nbsp; &nbsp;
+          <div id="rerun-btn-cs"
+            class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
+            Review again
+          </div>
+        </div>
       </div>
     </div>
-
-
-
     </div>
     <hr />
 
