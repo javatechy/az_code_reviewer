@@ -7,38 +7,73 @@
 </head>
 
 <body class="text-slate-900">
-  <div class="m-4 w-[48rem] max-h-[48rem] overflow-y-auto flex flex-col space-y-2">
-    <div class="flex flex-col font-mono space-y-2">
 
-      <div class="flex flex-row items-center">
-        <div class="text-xl flex-grow">
-          AI code reviewer
-          <span id="codeball-link" class="text-xs invisible text-slate-400">(<a href="https://github.com/javatechy/AICodeReviewer/blob/main/README.md"
-              target="_blank" class="inline text-orange-600 hover:text-orange-500">Read me if you are stuck</a>)</span>
+  <body>
+    <div class="m-4 w-[48rem] max-h-[48rem] overflow-y-auto flex flex-col space-y-2">
+      <div class="flex flex-col font-mono space-y-2">
+
+        <div class="flex flex-row items-center">
+          <div class="text-xl flex-grow">
+            AI code reviewer
+            <span id="codeball-link" class="text-xs invisible text-slate-400">(<a
+                href="https://github.com/javatechy/CodeReviewerPublic/blob/main/README.md" target="_blank"
+                class="inline text-orange-600 hover:text-orange-500">Read me if you are stuck</a>)</span>
+          </div>
+          <div id="rerun-btn"
+            class="invisible text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
+            run again
+          </div>
         </div>
-        <div id="rerun-btn"
-          class="invisible text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
-          run again
+
+       
+        </div>
+        <hr />
+        <div class="tab-content" id="tabs-tabContentFill">
+          <div class="tab-pane fade show active" id="tabs-homeFill" role="tabpanel" aria-labelledby="tabs-home-tabFill">
+            Tab 1 content fill
+          </div>
+          <div class="tab-pane fade" id="tabs-profileFill" role="tabpanel" aria-labelledby="tabs-profile-tabFill">
+            Tab 2 content fill
+          </div>
+          <div class="tab-pane fade" id="tabs-messagesFill" role="tabpanel" aria-labelledby="tabs-profile-tabFill">
+            Tab 3 content fill
+          </div>
+        <hr />
+        <div class="flex flex-row items-center text-sm">
+          <input type="password" class="col-sm-10 form-control" id="patToken" value=""
+            placeholder="Personal Access Token"> &nbsp; &nbsp;
+
+          <div id="savePAT"
+            class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
+            Save
+          </div> &nbsp; &nbsp; &nbsp;
+          <label for="myCheck">Post comments on PR</label> &nbsp;
+          <input type="checkbox" id="postComments">
+          &nbsp; &nbsp;
+          <div id="reviewSelection"
+            class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
+            Review Selection
+          </div>
+        </div>
+        <hr />
+
+        <div class="flex flex-row items-center text-sm text-slate-400">
+          <div class="flex-grow flex flex-row space-x-1 items-center truncate overflow-hidden">
+            <span id="status-icon">
+            </span>
+            <span id="pr-url"></span></p>
+          </div>
         </div>
       </div>
+      <hr />
 
-      <div class="flex flex-row items-center text-sm text-slate-400">
-        <div class="flex-grow flex flex-row space-x-1 items-center truncate overflow-hidden">
-          <span id="status-icon">
-          </span>
-          <span id="pr-url"></span></p>
-        </div>
+      <div class="my-4">
+
+        <div id="result" class="flex flex-col space-y-2"></div>
+
       </div>
-    </div>
-    <hr />
 
-    <div class="my-4">
-
-      <div id="result" class="flex flex-col space-y-2"></div>
-
-    </div>
-
-    <script src="popup.js"></script>
-</body>
+      <script src="popup.js"></script>
+  </body>
 
 </html>

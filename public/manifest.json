@@ -13,10 +13,7 @@
     "default_title": "AI Code Reviewer",
     "default_popup": "popup.html"
   },
-  "permissions": [
-    "activeTab",
-    "storage"
-  ],
+  "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": [
     "https://*.openai.com/",
     "https://*.azure.com/",
