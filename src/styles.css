@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 @layer components {
+
   /* Style the tab */
   .tab {
     overflow: hidden;
@@ -18,8 +19,11 @@
     outline: none;
     cursor: pointer;
     padding: 8px 10px;
-    transition: 0.3s;
-    font-size: 17px;
+    font-size: 14px;
+  }
+
+  .activeButton {
+    border-bottom: 2px solid #2754d5 !important;
   }
 
   /* Change background color of buttons on hover */
@@ -39,7 +43,7 @@
     border: 1px solid #ccc;
     border-top: none;
   }
-  
+
   .resultContent {
     padding: 6px 12px;
   }

@@ -34,22 +34,34 @@ postComments.addEventListener('change', function () {
   localStorage.setItem('postComments', postComments.checked);
 });
 
-// TODO: Full review settings, review PR description
+
+if (localStorage.getItem('activeButton')) {
+  activateButton(localStorage.getItem('activeButton'))
+} else {
+  activateButton('azure')
+}
 
 
-// For active tabs
-document.getElementById('azureContent').style.display = "block";
-document.getElementById('githubContent').style.display = "none";
+function activateButton(buttonActivated) {
+  let contentList = ["azureContent", "githubContent", "codeSnippetContent"]
+  let buttonList = ["azure", "github", "codeSnippet"]
 
-document.getElementById('azure').addEventListener('click', function () {
-  document.getElementById('azureContent').style.display = "block";
-  document.getElementById('githubContent').style.display = "none";
-});
+  for (let i = 0; i < contentList.length; i++) {
 
-document.getElementById('github').addEventListener('click', function () {
-  document.getElementById('azureContent').style.display = "none";
-  document.getElementById('githubContent').style.display = "block";
-});
+    if (!(document.getElementById(buttonList[i]))) {
+      continue;
+    }
+    if (buttonActivated === buttonList[i]) {
+      document.getElementById(contentList[i]).style.display = "block";
+      document.getElementById(buttonList[i]).classList.add("activeButton");
+    }
+    else {
+      document.getElementById(contentList[i]).style.display = "none";
+      document.getElementById(buttonList[i]).classList.remove("activeButton");
+    }
+  }
+  localStorage.setItem('activeButton', buttonActivated)
+}
 
 function parseJsonOrReturnAsIs(str) {
   try {
@@ -59,22 +71,31 @@ function parseJsonOrReturnAsIs(str) {
   }
 }
 
-function inProgress(ongoing, failed = false, rerun = true) {
+function inProgress(ongoing, failed = false, rerun = true, isCodeSnippet = false) {
+  let statusIcon = 'status-icon'
+  let rerunButton = 'rerun-btn'
+  if (isCodeSnippet) {
+    rerunButton += '-cs'
+    statusIcon += '-cs'
+  }
+
   if (ongoing) {
-    document.getElementById('status-icon').innerHTML = spinner;
-    document.getElementById('rerun-btn').classList.add('invisible');
-    document.getElementById('codeball-link').classList.add('invisible');
+    document.getElementById(statusIcon).innerHTML = spinner;
+    document.getElementById(rerunButton).classList.add('invisible');
   } else {
     if (failed) {
-      document.getElementById('status-icon').innerHTML = xcircle;
+      document.getElementById(statusIcon).innerHTML = xcircle;
     } else {
-      document.getElementById('status-icon').innerHTML = checkmark;
+      document.getElementById(statusIcon).innerHTML = checkmark;
     }
     if (rerun) {
-      document.getElementById('rerun-btn').classList.remove('invisible');
-      document.getElementById('codeball-link').classList.remove('invisible');
+      document.getElementById(rerunButton).classList.remove('invisible');
     }
   }
+}
+
+function inProgressCodeSnippet(ongoing, failed = false, rerun = true) {
+  inProgress(ongoing,failed, rerun, true)
 }
 
 async function getPRDetails() {
@@ -232,7 +253,7 @@ async function reviewPR(prDetail) {
       headers,
     })
   ).json();
-  
+
   console.log(' PR Detail response from AZ : ' + JSON.stringify(prDetailResponse));
   prDetail.sourceBranch = prDetailResponse.sourceRefName.replace('refs/heads/', ''); // your branch
   prDetail.targetBranch = prDetailResponse.targetRefName.replace('refs/heads/', ''); // master
@@ -241,7 +262,7 @@ async function reviewPR(prDetail) {
   prDetail.targetCommitId = prDetailResponse.lastMergeTargetCommit.commitId;
   console.log(' PR Detail : ' + JSON.stringify(prDetail));
 
-  const compareUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/diffs/commits?$top=10&$skip=0&baseVersion=${prDetail.targetBranch}&targetVersion=${prDetail.sourceBranch}&api-version=7.0`;
+  const compareUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/diffs/commits?$top=100&$skip=0&baseVersion=${prDetail.targetBranch}&targetVersion=${prDetail.sourceBranch}&api-version=7.0`;
   var filePathToContentObjects = [];
   const getContentsOfChangedFiles = async () => {
     const compareResponse = await (
@@ -250,8 +271,8 @@ async function reviewPR(prDetail) {
       })
     ).json();
     // console.log(JSON.stringify(compareResponse))
+    console.log('compareUrl ' + compareUrl);
     const changes = compareResponse.changes;
-
     console.log('changes' + JSON.stringify(changes));
     for (const change of changes) {
       console.log(change.item.gitObjectType);
@@ -361,8 +382,8 @@ async function reviewPR(prDetail) {
     As a code reviewer, your task is:
     - Identify potential bugs and optimization in the patch
     - Do not highlight minor issues , nitpicks and test cases.
-    - Keep your comment very precise and less than 4 points. Order comments based on the impact.
-    - Use bullet points if you have multiple comments.`
+    - Keep your comment very precise and less than 200 words.
+    - Use bullet points if you have multiple comments. Order comments based on the impact.`
 
     console.log("prompt " + prompt)
     await callChatGPT(
@@ -452,7 +473,7 @@ async function reviewPR(prDetail) {
 
 }
 
-async function run() {
+async function reviewAzurePR() {
   let prDetail = await getPRDetails();
   console.log(JSON.stringify(prDetail));
   let prUrl = document.getElementById('pr-url');
@@ -485,7 +506,9 @@ async function run() {
   });
 }
 
-document.getElementById('reviewSelectedCode').addEventListener("click", async function reivewCodeSelection() {
+// document.getElementById('reviewSelectedCode').addEventListener("click", async function reivewCodeSelection() {
+async function reviewCodeSelection() {
+  inProgressCodeSnippet(true)
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   let result;
   try {
@@ -494,9 +517,15 @@ document.getElementById('reviewSelectedCode').addEventListener("click", async fu
       function: () => getSelection().toString(),
     });
   } catch (e) {
+    inProgressCodeSnippet(false, true, true);
     return; // ignoring an unsupported page like chrome://extensions
   }
+  
   console.log('Selection: ' + result);
+  if(!result){
+    inProgress(false, true, false);
+  }
+
   let prompt = `
     Act as a code reviewer, providing precise feedback on the code changes below only if the provided text is code.
     \n
@@ -513,15 +542,40 @@ document.getElementById('reviewSelectedCode').addEventListener("click", async fu
     (answer) => {
       document.getElementById('result').innerHTML =
         converter.makeHtml(answer);
+        inProgressCodeSnippet(false, false, true)
     },
     () => {
       // chrome.storage.session.set({
       //   [prDetail.prSessionKey]: document.getElementById('result').innerHTML,
       // });
-      inProgress(false);
+      inProgressCodeSnippet(false, true, true);
     }
   );
 
+};
+
+if (localStorage.getItem('activeButton') === 'azure') {
+  reviewAzurePR();
+}
+
+if (localStorage.getItem('activeButton') === 'codeSnippet') {
+  reviewCodeSelection();
+}
+
+document.getElementById('rerun-btn-cs').onclick = () => {
+  reviewCodeSelection();
+};
+
+document.getElementById('azure').addEventListener('click', function () {
+  activateButton('azure');
+  reviewAzurePR();
 });
 
-run();
+document.getElementById('github').addEventListener('click', function () {
+  activateButton('github')
+});
+
+document.getElementById('codeSnippet').addEventListener('click', function () {
+  activateButton('codeSnippet')
+  reviewCodeSelection();
+});
