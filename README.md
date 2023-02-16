@@ -1,10 +1,10 @@
-# codereview.gpt
+# AICodeReviewer
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/sturdy-dev/codereview.gpt/main/public/icons/icon_128.png">
 </p>
 <p align='center'>
-    Review GitHub Pull Requests using ChatGPT so that you can pretent do work.
+    Review Azure devops repos pull Requests using ChatGPT.
 </p>
 <p align='center'>
     <a href="https://github.com/sturdy-dev/codereview.gpt/blob/main/LICENSE.txt">
@@ -25,9 +25,10 @@
 
 ## Overview
 
-This is a Chrome extension which reviews Pull Requests for you using [ChatGPT](https://chat.openai.com/).
+This is a Chrome extension(works on edge too) which reviews Pull Requests for you using [ChatGPT](https://chat.openai.com/) and also add comments on a PR from your behalf.
 
-Here's an example output for [this](https://github.com/sturdy-dev/semantic-code-search/pull/17) Pull Request:
+Here's an example output:
+
 
 https://user-images.githubusercontent.com/4030927/207372123-46d7ee8c-bd3e-4272-8ccb-4639f9f71458.mp4
 
