@@ -3,6 +3,9 @@
 
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <title>AI Code reviewer</title>
 </head>
 
@@ -15,48 +18,45 @@
         <div class="flex flex-row items-center">
           <div class="text-xl flex-grow">
             AI code reviewer
-            <span id="codeball-link" class="text-xs invisible text-slate-400">(<a
+            <span id="codeball-link" class="text-xs invisible text-slate-400"><a
                 href="https://github.com/javatechy/CodeReviewerPublic/blob/main/README.md" target="_blank"
-                class="inline text-orange-600 hover:text-orange-500">Read me if you are stuck</a>)</span>
+                class="inline text-orange-600 hover:text-orange-500">Read me if you are stuck</a></span>
           </div>
+          <div id="reviewSelectedCode"
+            class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
+            Review selected code
+          </div>
+        </div>
+      </div>
+      <hr />
+      <div class="tab">
+        <button id="azure" class="tablinks">Azure Devops</button>
+        <button id="github" class="tablinks">Github</button>
+      </div>
+
+      <div id="azureContent" class="tabcontent">
+        <div class="flex flex-row items-center text-sm">
+          <div class="invisible">
+            <input type="password" class="col-sm-10 form-control" id="patToken" value=""
+              placeholder="Personal Access Token"> &nbsp; &nbsp;
+
+            <div id="savePAT" class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
+              Save
+            </div> &nbsp; &nbsp; &nbsp;
+          </div>
+          <label for="myCheck">Post comments on PR</label> &nbsp;
+          <input type="checkbox" id="postComments">
+          &nbsp; &nbsp; &nbsp;
+          <label for="myCheck">Review complete diff too</label> &nbsp;
+          <input type="checkbox" id="reivewCompleteDiff"> &nbsp; &nbsp; &nbsp;
           <div id="rerun-btn"
             class="invisible text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
             run again
           </div>
-        </div>
+          <br />
 
-       
         </div>
-        <hr />
-        <div class="tab-content" id="tabs-tabContentFill">
-          <div class="tab-pane fade show active" id="tabs-homeFill" role="tabpanel" aria-labelledby="tabs-home-tabFill">
-            Tab 1 content fill
-          </div>
-          <div class="tab-pane fade" id="tabs-profileFill" role="tabpanel" aria-labelledby="tabs-profile-tabFill">
-            Tab 2 content fill
-          </div>
-          <div class="tab-pane fade" id="tabs-messagesFill" role="tabpanel" aria-labelledby="tabs-profile-tabFill">
-            Tab 3 content fill
-          </div>
-        <hr />
-        <div class="flex flex-row items-center text-sm">
-          <input type="password" class="col-sm-10 form-control" id="patToken" value=""
-            placeholder="Personal Access Token"> &nbsp; &nbsp;
-
-          <div id="savePAT"
-            class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
-            Save
-          </div> &nbsp; &nbsp; &nbsp;
-          <label for="myCheck">Post comments on PR</label> &nbsp;
-          <input type="checkbox" id="postComments">
-          &nbsp; &nbsp;
-          <div id="reviewSelection"
-            class="text-lg border border-slate-900 hover:bg-slate-200 cursor-pointer px-2 rounded-md">
-            Review Selection
-          </div>
-        </div>
-        <hr />
-
+        <br />
         <div class="flex flex-row items-center text-sm text-slate-400">
           <div class="flex-grow flex flex-row space-x-1 items-center truncate overflow-hidden">
             <span id="status-icon">
@@ -65,15 +65,24 @@
           </div>
         </div>
       </div>
-      <hr />
 
-      <div class="my-4">
-
-        <div id="result" class="flex flex-col space-y-2"></div>
-
+      <div id="githubContent" class="tabcontent">
+        <p>Coming soon....</p>
       </div>
+    </div>
 
-      <script src="popup.js"></script>
+
+
+    </div>
+    <hr />
+
+    <div class="my-4">
+
+      <div id="result" class="resultContent flex flex-col space-y-2"></div>
+
+    </div>
+
+    <script src="popup.js"></script>
   </body>
 
 </html>

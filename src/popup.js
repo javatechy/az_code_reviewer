@@ -19,16 +19,36 @@ const xcircle = `
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
 `;
+
+// PAT token settings
 document.getElementById('patToken').value = localStorage.getItem('patToken');
 document.getElementById('savePAT').addEventListener('click', function () {
   localStorage.setItem('patToken', document.getElementById('patToken').value);
 });
 
+// postComments settings
 let postComments = document.getElementById('postComments')
 postComments.checked = (localStorage.getItem('postComments') === 'true');
 postComments.addEventListener('change', function () {
   console.log('changed comment preference: ' + postComments.checked);
   localStorage.setItem('postComments', postComments.checked);
+});
+
+// TODO: Full review settings, review PR description
+
+
+// For active tabs
+document.getElementById('azureContent').style.display = "block";
+document.getElementById('githubContent').style.display = "none";
+
+document.getElementById('azure').addEventListener('click', function () {
+  document.getElementById('azureContent').style.display = "block";
+  document.getElementById('githubContent').style.display = "none";
+});
+
+document.getElementById('github').addEventListener('click', function () {
+  document.getElementById('azureContent').style.display = "none";
+  document.getElementById('githubContent').style.display = "block";
 });
 
 function parseJsonOrReturnAsIs(str) {
@@ -188,33 +208,34 @@ const showdown = require('showdown');
 const converter = new showdown.Converter();
 
 async function reviewPR(prDetail) {
+  console.log('Reviewing PR');
   inProgress(true);
+  console.log('inProgress completed');
   document.getElementById('result').innerHTML = '';
+  console.log('set innerHRML completed');
   chrome.storage.session.remove([prDetail.prSessionKey]);
-
+  console.log('remove sessionkey');
+  console.log('Reviewing PR');
   const personalAccessToken = localStorage.getItem('patToken');
+  console.log(`PAT PR ${personalAccessToken} `);
   const pullRequestDetailUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/pullrequests/${prDetail.pullRequestId}?api-version=7.0`;
-  const headers = {
+  console.log(`Making azure calls to fetch pull request details ${pullRequestDetailUrl}`);
+  let headers = {
     Authorization: `Basic ${personalAccessToken}`,
     'Content-Type': 'application/json',
+    Accept: '*/*'
   };
   //  str.replace("data-", "")
-  console.log('Headers ');
-
+  console.log('Headers for AZ calls =======> ' + JSON.stringify(headers));
   const prDetailResponse = await (
     await fetch(pullRequestDetailUrl, {
       headers,
     })
   ).json();
-
-  prDetail.sourceBranch = prDetailResponse.sourceRefName.replace(
-    'refs/heads/',
-    ''
-  ); // your branch
-  prDetail.targetBranch = prDetailResponse.targetRefName.replace(
-    'refs/heads/',
-    ''
-  ); // master
+  
+  console.log(' PR Detail response from AZ : ' + JSON.stringify(prDetailResponse));
+  prDetail.sourceBranch = prDetailResponse.sourceRefName.replace('refs/heads/', ''); // your branch
+  prDetail.targetBranch = prDetailResponse.targetRefName.replace('refs/heads/', ''); // master
 
   prDetail.sourceCommitId = prDetailResponse.lastMergeSourceCommit.commitId;
   prDetail.targetCommitId = prDetailResponse.lastMergeTargetCommit.commitId;
@@ -242,15 +263,13 @@ async function reviewPR(prDetail) {
             headers,
           })
         ).text();
-        console.log(
-          `item path : ${change.item.path} response size : ${itemResponse.length}`
-        );
+        console.log(`item path : ${change.item.path} response size : ${itemResponse.length}`);
 
         // TODO ; Add source and commit API calls
         const sourceURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.sourceCommitId}`;
         const targetURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.targetCommitId}`;
 
-        console.log(`sourceURL : ${sourceURL} targetURL : ${targetURL}`);
+        console.log(`sourceURL of the file : ${sourceURL} \n targetURL : ${targetURL}`);
 
         let sourceCode = await (
           await fetch(sourceURL, {
@@ -288,7 +307,7 @@ async function reviewPR(prDetail) {
           '',
           { context: 0 }
         );
-        console.log(diff);
+        // console.log(diff);
         const structuredDiff = jsdiff.structuredPatch(
           `Source ${change.item.path}`,
           `target ${change.item.path}`,
@@ -298,7 +317,7 @@ async function reviewPR(prDetail) {
           '',
           { context: 0 }
         );
-        console.log(JSON.stringify(structuredDiff));
+        // console.log(JSON.stringify(structuredDiff));
 
         filePathToContentObjects.push({
           path: change.item.path,
@@ -433,37 +452,7 @@ async function reviewPR(prDetail) {
 
 }
 
-function openCity(evt, cityName) {
-  var i, tabcontent, tablinks;
-  tabcontent = document.getElementsByClassName("tabcontent");
-  for (i = 0; i < tabcontent.length; i++) {
-    tabcontent[i].style.display = "none";
-  }
-  tablinks = document.getElementsByClassName("tablinks");
-  for (i = 0; i < tablinks.length; i++) {
-    tablinks[i].className = tablinks[i].className.replace(" active", "");
-  }
-  document.getElementById(cityName).style.display = "block";
-  evt.currentTarget.className += " active";
-}
-
 async function run() {
-  let tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-  console.log(JSON.stringify(tab));
-  document.getElementById("reviewSelection").onclick = async () => {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    let result;
-    try {
-      [{result}] = await chrome.scripting.executeScript({
-        target: {tabId: tab.id},
-        function: () => getSelection().toString(),
-      });
-    } catch (e) {
-      return; // ignoring an unsupported page like chrome://extensions
-    }
-    document.body.append('Selection: ' + result);
-  };
-
   let prDetail = await getPRDetails();
   console.log(JSON.stringify(prDetail));
   let prUrl = document.getElementById('pr-url');
@@ -495,5 +484,44 @@ async function run() {
     }
   });
 }
+
+document.getElementById('reviewSelectedCode').addEventListener("click", async function reivewCodeSelection() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  let result;
+  try {
+    [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      function: () => getSelection().toString(),
+    });
+  } catch (e) {
+    return; // ignoring an unsupported page like chrome://extensions
+  }
+  console.log('Selection: ' + result);
+  let prompt = `
+    Act as a code reviewer, providing precise feedback on the code changes below only if the provided text is code.
+    \n
+    ${result}
+    \n
+    As a code reviewer, your task is:
+    - Identify potential bugs and optimization in the patch
+    - Do not highlight minor issues and nitpicks.
+    - Use bullet points if you have multiple comments.`
+
+  console.log("prompt " + result)
+  await callChatGPT(
+    prompt,
+    (answer) => {
+      document.getElementById('result').innerHTML =
+        converter.makeHtml(answer);
+    },
+    () => {
+      // chrome.storage.session.set({
+      //   [prDetail.prSessionKey]: document.getElementById('result').innerHTML,
+      // });
+      inProgress(false);
+    }
+  );
+
+});
 
 run();
