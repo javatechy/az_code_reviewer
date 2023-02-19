@@ -194,8 +194,7 @@ async function callChatGPT(question, callback, onDone) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      conversation_id :`4f04a9dc-80d9-484c-bf67-3d70d78085fe`
+      Authorization: `Bearer ${accessToken}`
     },
     body: JSON.stringify({
       action: 'next',
@@ -278,77 +277,82 @@ async function reviewPR(prDetail) {
     for (const change of changes) {
       console.log(change.item.gitObjectType);
       if (change.item.gitObjectType === 'blob') {
-        const itemUrl = `${change.item.url}`;
-        console.log('[reviewPR] found a blob match' + itemUrl);
-        const itemResponse = await (
-          await fetch(itemUrl, {
-            headers,
-          })
-        ).text();
-        console.log(`[reviewPR] changed item path : ${change.item.path} response size : ${itemResponse.length}`);
 
-        // TODO ; Add source and commit API calls
-        const sourceURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.sourceCommitId}`;
-        const targetURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.targetCommitId}`;
+        try {
+          const itemUrl = `${change.item.url}`;
+          console.log('[reviewPR] found a blob match' + itemUrl);
+          const itemResponse = await (
+            await fetch(itemUrl, {
+              headers,
+            })
+          ).text();
+          console.log(`[reviewPR] changed item path : ${change.item.path} response size : ${itemResponse.length}`);
 
-        console.log(`[reviewPR] sourceURL of the changed file : ${sourceURL} \n targetURL : ${targetURL}`);
+          // TODO ; Add source and commit API calls
+          const sourceURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.sourceCommitId}`;
+          const targetURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.targetCommitId}`;
 
-        let sourceCode = await (
-          await fetch(sourceURL, {
-            headers,
-          })
-        ).text();
+          console.log(`[reviewPR] sourceURL of the changed file : ${sourceURL} \n targetURL : ${targetURL}`);
 
-        if (sourceCode.includes('could not be found')) {
-          console.log('[reviewPR] Deleted file, no review required : ' + change.item.path);
-          sourceCode = '';
-          continue;
+          let sourceCode = await (
+            await fetch(sourceURL, {
+              headers,
+            })
+          ).text();
+
+          if (sourceCode.includes('could not be found')) {
+            console.log('[reviewPR] Deleted file, no review required : ' + change.item.path);
+            sourceCode = '';
+            continue;
+          }
+
+          let sourceFilePath = change.item.path;
+          let targetFilePath = change.item.path;
+          let targetCode = await (
+            await fetch(targetURL, {
+              headers,
+            })
+          ).text();
+
+          if (targetCode.includes('could not be found')) {
+            console.log(`[reviewPR] Couldn't find the file  ${sourceFilePath} in in target branch(master)`);
+            targetFilePath = '';
+            targetCode = '';
+          }
+
+          console.log(`[reviewPR] finding diff between source and target versions`);
+          const jsdiff = require('diff');
+          const diff = jsdiff.createTwoFilesPatch(
+            `Source ${sourceFilePath}`,
+            `target ${targetFilePath}`,
+            targetCode,
+            sourceCode,
+            '',
+            '',
+            { context: 0 }
+          );
+          console.log(`[reviewPR] diff length ${diff.length}`);
+          const structuredDiff = jsdiff.structuredPatch(
+            `Source ${change.item.path}`,
+            `target ${change.item.path}`,
+            targetCode,
+            sourceCode,
+            '',
+            '',
+            { context: 0 }
+          );
+
+          console.log(`[reviewPR] structuredDiff => ${JSON.stringify(structuredDiff)}`);
+
+          filePathToContentObjects.push({
+            path: change.item.path,
+            diff: diff,
+            structuredDiff: structuredDiff,
+            firstChangeLocation: structuredDiff.hunks[0]?.newStart
+          });
+        } catch (ex) {
+          console.log("Error while updating the `filePathToContentObjects` " + ex);
         }
-
-        let sourceFilePath = change.item.path;
-        let targetFilePath = change.item.path;
-        let targetCode = await (
-          await fetch(targetURL, {
-            headers,
-          })
-        ).text();
-
-        if (targetCode.includes('could not be found')) {
-          console.log(`[reviewPR] Couldn't find the file  ${sourceFilePath} in in target branch(master)`);
-          targetFilePath = '';
-          targetCode = '';
-        }
-
-        console.log(`[reviewPR] finding diff between source and target versions`);
-        const jsdiff = require('diff');
-        const diff = jsdiff.createTwoFilesPatch(
-          `Source ${sourceFilePath}`,
-          `target ${targetFilePath}`,
-          targetCode,
-          sourceCode,
-          '',
-          '',
-          { context: 0 }
-        );
-        console.log(`[reviewPR] diff length ${diff.length}`);
-        const structuredDiff = jsdiff.structuredPatch(
-          `Source ${change.item.path}`,
-          `target ${change.item.path}`,
-          targetCode,
-          sourceCode,
-          '',
-          '',
-          { context: 0 }
-        );
-
-        console.log(`[reviewPR] structuredDiff => ${JSON.stringify(structuredDiff)}`);
-
-        filePathToContentObjects.push({
-          path: change.item.path,
-          diff: diff,
-          structuredDiff: structuredDiff,
-          firstChangeLocation: structuredDiff.hunks[0]?.newStart
-        });
       }
     }
   };
@@ -393,8 +397,7 @@ async function reviewPR(prDetail) {
       prompt,
       (answer) => {
         commentsResponseGPT = answer;
-        document.getElementById('result').innerHTML =
-          converter.makeHtml(answer);
+        document.getElementById('result').innerHTML = parseToHtml(answer);
       },
       () => {
         chrome.storage.session.set({
@@ -411,7 +414,7 @@ async function reviewPR(prDetail) {
     var isPostCommentEnabled = (localStorage.getItem('postComments') === 'true');
     let skipConditionComment =
       commentsResponseGPT.includes('Please login at') ||
-      responseFinal.includes('Too many requests');
+      responseFinal.includes('Too many requests') || commentsResponseGPT.includes('message_length_exceeds_limit');
 
     console.log(`[reviewPR] isPostCommentEnabled ${isPostCommentEnabled}`);
 
@@ -507,6 +510,19 @@ async function reviewAzurePR() {
   });
 }
 
+function parseToHtml(answer) {
+  try {
+    return converter.makeHtml(answer);
+  } catch (ex) {
+    console.log("Make html failed to parse " + ex)
+    var res = JSON.stringify(parseJsonOrReturnAsIs(answer))
+    console.log("Make html failed to parse, res " + res)
+    if (res.includes('message_length_exceeds_limit')) {
+      return converter.makeHtml(parseJsonOrReturnAsIs(parseJsonOrReturnAsIs(answer)).message)     //{"detail":{"message":"The message you submitted was too long, please reload the conversation and submit something shorter.","code":"message_length_exceeds_limit"}}
+    }
+    return res;
+  }
+}
 // document.getElementById('reviewSelectedCode').addEventListener("click", async function reivewCodeSelection() {
 async function reviewCodeSelection() {
   inProgressCodeSnippet(true)
@@ -545,8 +561,7 @@ async function reviewCodeSelection() {
   await callChatGPT(
     prompt,
     (answer) => {
-      document.getElementById('result').innerHTML =
-        converter.makeHtml(answer);
+      document.getElementById('result').innerHTML = parseToHtml(answer);
       inProgressCodeSnippet(false, false, true)
     },
     () => {

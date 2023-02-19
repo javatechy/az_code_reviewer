@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Code Reviewer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Effortlessly enhance your code reviews with the power of ChatGPT",
   "icons": {
     "16": "icons/icon.png",
