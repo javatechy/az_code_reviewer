@@ -95,7 +95,7 @@ function inProgress(ongoing, failed = false, rerun = true, isCodeSnippet = false
 }
 
 function inProgressCodeSnippet(ongoing, failed = false, rerun = true) {
-  inProgress(ongoing,failed, rerun, true)
+  inProgress(ongoing, failed, rerun, true)
 }
 
 async function getPRDetails() {
@@ -195,6 +195,7 @@ async function callChatGPT(question, callback, onDone) {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
+      conversation_id :`4f04a9dc-80d9-484c-bf67-3d70d78085fe`
     },
     body: JSON.stringify({
       action: 'next',
@@ -229,38 +230,38 @@ const showdown = require('showdown');
 const converter = new showdown.Converter();
 
 async function reviewPR(prDetail) {
-  console.log('Reviewing PR');
+  console.log('[reviewPR] Reviewing PR');
   inProgress(true);
-  console.log('inProgress completed');
+  console.log('[reviewPR] inProgress completed');
   document.getElementById('result').innerHTML = '';
-  console.log('set innerHRML completed');
+  console.log('[reviewPR] set innerHRML completed');
   chrome.storage.session.remove([prDetail.prSessionKey]);
-  console.log('remove sessionkey');
-  console.log('Reviewing PR');
+  console.log('[reviewPR] remove sessionkey');
+  console.log('[reviewPR] Reviewing PR');
   const personalAccessToken = localStorage.getItem('patToken');
-  console.log(`PAT PR ${personalAccessToken} `);
+  console.log(`[reviewPR] PAT PR ${personalAccessToken} `);
   const pullRequestDetailUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/pullrequests/${prDetail.pullRequestId}?api-version=7.0`;
-  console.log(`Making azure calls to fetch pull request details ${pullRequestDetailUrl}`);
+  console.log(`[reviewPR] Making azure calls to fetch pull request details ${pullRequestDetailUrl}`);
   let headers = {
     Authorization: `Basic ${personalAccessToken}`,
     'Content-Type': 'application/json',
     Accept: '*/*'
   };
   //  str.replace("data-", "")
-  console.log('Headers for AZ calls =======> ' + JSON.stringify(headers));
+  console.log('[reviewPR] Headers for AZ calls =======> ' + JSON.stringify(headers));
   const prDetailResponse = await (
     await fetch(pullRequestDetailUrl, {
       headers,
     })
   ).json();
 
-  console.log(' PR Detail response from AZ : ' + JSON.stringify(prDetailResponse));
+  console.log('[reviewPR]  PR Detail response from AZ : ' + JSON.stringify(prDetailResponse));
   prDetail.sourceBranch = prDetailResponse.sourceRefName.replace('refs/heads/', ''); // your branch
   prDetail.targetBranch = prDetailResponse.targetRefName.replace('refs/heads/', ''); // master
 
   prDetail.sourceCommitId = prDetailResponse.lastMergeSourceCommit.commitId;
   prDetail.targetCommitId = prDetailResponse.lastMergeTargetCommit.commitId;
-  console.log(' PR Detail : ' + JSON.stringify(prDetail));
+  console.log('[reviewPR]  prDetail object : ' + JSON.stringify(prDetail));
 
   const compareUrl = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/diffs/commits?$top=100&$skip=0&baseVersion=${prDetail.targetBranch}&targetVersion=${prDetail.sourceBranch}&api-version=7.0`;
   var filePathToContentObjects = [];
@@ -271,26 +272,26 @@ async function reviewPR(prDetail) {
       })
     ).json();
     // console.log(JSON.stringify(compareResponse))
-    console.log('compareUrl ' + compareUrl);
+    console.log('[reviewPR] compareUrl  for diff: ' + compareUrl);
     const changes = compareResponse.changes;
-    console.log('changes' + JSON.stringify(changes));
+    console.log('[reviewPR] changed files' + JSON.stringify(changes));
     for (const change of changes) {
       console.log(change.item.gitObjectType);
       if (change.item.gitObjectType === 'blob') {
         const itemUrl = `${change.item.url}`;
-        console.log('found a match' + itemUrl);
+        console.log('[reviewPR] found a blob match' + itemUrl);
         const itemResponse = await (
           await fetch(itemUrl, {
             headers,
           })
         ).text();
-        console.log(`item path : ${change.item.path} response size : ${itemResponse.length}`);
+        console.log(`[reviewPR] changed item path : ${change.item.path} response size : ${itemResponse.length}`);
 
         // TODO ; Add source and commit API calls
         const sourceURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.sourceCommitId}`;
         const targetURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/items/${change.item.path}?versionType=Commit&version=${prDetail.targetCommitId}`;
 
-        console.log(`sourceURL of the file : ${sourceURL} \n targetURL : ${targetURL}`);
+        console.log(`[reviewPR] sourceURL of the changed file : ${sourceURL} \n targetURL : ${targetURL}`);
 
         let sourceCode = await (
           await fetch(sourceURL, {
@@ -299,7 +300,7 @@ async function reviewPR(prDetail) {
         ).text();
 
         if (sourceCode.includes('could not be found')) {
-          console.log('Deleted file, no review required : ' + change.item.path);
+          console.log('[reviewPR] Deleted file, no review required : ' + change.item.path);
           sourceCode = '';
           continue;
         }
@@ -313,11 +314,12 @@ async function reviewPR(prDetail) {
         ).text();
 
         if (targetCode.includes('could not be found')) {
-          console.log("Couldn't find in target branch(master)");
+          console.log(`[reviewPR] Couldn't find the file  ${sourceFilePath} in in target branch(master)`);
           targetFilePath = '';
           targetCode = '';
         }
 
+        console.log(`[reviewPR] finding diff between source and target versions`);
         const jsdiff = require('diff');
         const diff = jsdiff.createTwoFilesPatch(
           `Source ${sourceFilePath}`,
@@ -328,7 +330,7 @@ async function reviewPR(prDetail) {
           '',
           { context: 0 }
         );
-        // console.log(diff);
+        console.log(`[reviewPR] diff length ${diff.length}`);
         const structuredDiff = jsdiff.structuredPatch(
           `Source ${change.item.path}`,
           `target ${change.item.path}`,
@@ -338,13 +340,14 @@ async function reviewPR(prDetail) {
           '',
           { context: 0 }
         );
-        // console.log(JSON.stringify(structuredDiff));
+
+        console.log(`[reviewPR] structuredDiff => ${JSON.stringify(structuredDiff)}`);
 
         filePathToContentObjects.push({
           path: change.item.path,
           diff: diff,
           structuredDiff: structuredDiff,
-          firstChangeLocation: structuredDiff.hunks[0].newStart
+          firstChangeLocation: structuredDiff.hunks[0]?.newStart
         });
       }
     }
@@ -370,22 +373,22 @@ async function reviewPR(prDetail) {
 
     console.log("filePathToContentObjects[i].firstChangeLocation: " + filePathToContentObjects[i].firstChangeLocation)
     let prompt = `
-    Act as a code reviewer of a file patch, providing precise feedback on the code changes below.
-    You are provided with the diff for a file changed in a pull request in a patch format.
+    Act as a code reviewer of a file patch, providing precise feedback.You are provided with the diff for a file changed in a pull request in a patch format.
     Patch entry has the file name in Subject line followed by the code changes (diffs) in a unidiff format.
-    \n\n
-    Patch of the file to review:
-    \n
-    ${filePathToContentObjects[i].diff}
-    \n\n
-
+  
     As a code reviewer, your task is:
     - Identify potential bugs and optimization in the patch
     - Do not highlight minor issues , nitpicks and test cases.
-    - Keep your comment very precise and less than 200 words.
-    - Use bullet points if you have multiple comments. Order comments based on the impact.`
+    - Keep what really matters and nothing else. Do not write explanations. 
+    - Use bullet points if you have multiple comments. Order comments based on the impact.
+    - Keep your comment very precise and less than 4 points.
 
-    console.log("prompt " + prompt)
+    Provide precise feedback on the code changes below
+    \n
+    ${filePathToContentObjects[i].diff}
+    \n\n`
+
+    console.log("[reviewPR]  prompt " + prompt)
     await callChatGPT(
       prompt,
       (answer) => {
@@ -402,7 +405,7 @@ async function reviewPR(prDetail) {
     );
 
     console.log(
-      `finished reviewing the code ${filePathToContentObjects[i].path}`
+      `[reviewPR] finished reviewing the code ${filePathToContentObjects[i].path}`
     );
 
     var isPostCommentEnabled = (localStorage.getItem('postComments') === 'true');
@@ -410,13 +413,13 @@ async function reviewPR(prDetail) {
       commentsResponseGPT.includes('Please login at') ||
       responseFinal.includes('Too many requests');
 
-
+    console.log(`[reviewPR] isPostCommentEnabled ${isPostCommentEnabled}`);
 
     if (!skipConditionComment && isPostCommentEnabled) {
       // add a comment
       let addCommentURL = `https://dev.azure.com/${prDetail.organisation}/${prDetail.project}/_apis/git/repositories/${prDetail.repoName}/pullRequests/${prDetail.pullRequestId}/threads?api-version=7.0`;
-      console.log(`Comment URL : ${addCommentURL}`);
-      console.log(`innerHTML URL : ${commentsResponseGPT}`);
+      console.log(`[reviewPR] Comment URL : ${addCommentURL}`);
+      console.log(`[reviewPR] innerHTML URL to be posted: ${commentsResponseGPT}`);
       // var commentsList = JSON.parse(commentsResponseGPT);
       // let len = commentsList.length;
       // console.log(JSON.stringify(commentsList));
@@ -443,14 +446,12 @@ async function reviewPR(prDetail) {
         },
       };
 
-      console.log(JSON.stringify(requestJson));
+      console.log(`[reviewPR] Comment to be posted on file ${filePathToContentObjects[i].path}: comment: ${JSON.stringify(requestJson)}`);
       await await fetch(addCommentURL, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify(requestJson),
       });
-      // }
-
     }
     inProgress(true);
 
@@ -520,21 +521,25 @@ async function reviewCodeSelection() {
     inProgressCodeSnippet(false, true, true);
     return; // ignoring an unsupported page like chrome://extensions
   }
-  
+
   console.log('Selection: ' + result);
-  if(!result){
+  if (!result) {
     inProgress(false, true, false);
   }
 
   let prompt = `
-    Act as a code reviewer, providing precise feedback on the code changes below only if the provided text is code.
-    \n
-    ${result}
-    \n
+    Act as a code reviewer, providing precise feedback on the code changes.
     As a code reviewer, your task is:
     - Identify potential bugs and optimization in the patch
-    - Do not highlight minor issues and nitpicks.
-    - Use bullet points if you have multiple comments.`
+    - Do not highlight minor issues , nitpicks and test cases.
+    - Keep what really matters and nothing else. Do not write explanations. 
+    - Use bullet points if you have multiple comments. Order comments based on the impact.
+    - Keep your comment very precise and less than 4 points.
+    \n
+    Provide precise feedback on the code changes below
+    \n
+    ${result}
+    \n`
 
   console.log("prompt " + result)
   await callChatGPT(
@@ -542,7 +547,7 @@ async function reviewCodeSelection() {
     (answer) => {
       document.getElementById('result').innerHTML =
         converter.makeHtml(answer);
-        inProgressCodeSnippet(false, false, true)
+      inProgressCodeSnippet(false, false, true)
     },
     () => {
       // chrome.storage.session.set({
